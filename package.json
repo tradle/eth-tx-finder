@@ -10,9 +10,9 @@
   "license": "ISC",
   "dependencies": {
     "async": "^2.0.0-rc.3",
-    "disect": "^1.2.0",
-    "eth-store": "^2.1.0",
-    "request": "^2.71.0"
+    "eth-store": "^2.2.0",
+    "request": "^2.71.0",
+    "xhr": "^2.2.0"
   },
   "devDependencies": {},
   "repository": {
