@@ -1,7 +1,7 @@
 {
   "name": "eth-tx-finder",
   "version": "1.0.0",
-  "description": "",
+  "description": "Status: Experimental",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -11,6 +11,16 @@
   "dependencies": {
     "async": "^2.0.0-rc.3",
     "disect": "^1.2.0",
+    "eth-store": "^2.1.0",
     "request": "^2.71.0"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kumavis/eth-tx-finder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kumavis/eth-tx-finder/issues"
+  },
+  "homepage": "https://github.com/kumavis/eth-tx-finder#readme"
 }

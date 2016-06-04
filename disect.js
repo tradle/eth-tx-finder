@@ -3,15 +3,21 @@ const async = require('async')
 
 module.exports = findIncrements
 
-function findIncrements(min, max, getValue, cb){
+/*
+
+currently using async.series b/c the other way is returning incorrect results for some reason...
+
+*/
+
+function findIncrements(min, max, getValue, progressCb, completeCb){
 
   getRange(min, max, function(err, range){
     if (err) return cb(err)
-    iterateOverRange(range, cb)
+    iterateOverRange(range, progressCb, completeCb)
   })
 
   function getRange(min, max, cb){
-    async.parallel([
+    async.series([
       getValue.bind(null, min),
       getValue.bind(null, max),
     ], function(err, results){
@@ -34,42 +40,53 @@ function findIncrements(min, max, getValue, cb){
     return span
   }
 
-  function iterateOverRange(range, cb){
+  function iterateOverRange(range, progressCb, completeCb){
     var min = range[0][0]
     var max = range[1][0]
     var span = spanOfRange(range)
     var length = lengthOfRange(range)
     // console.log('span, length:', [min, max], span, length)
-    if (span > 1 && length >= 2) {
-      // bisect both sides
+  
+    // more than one change across than one space:
+    // bisect both sides
+    if (span > 1 && length > 1) {
+
       var middle = min + Math.floor((max-min) / 2)
       var work = []
       if (middle !== min) {
-        work.push(findIncrements.bind(null, min, middle, getValue))
+        work.push(findIncrements.bind(null, min, middle, getValue, progressCb))
       }
       if (middle !== max) {
-        work.push(findIncrements.bind(null, middle, max, getValue))
+        work.push(findIncrements.bind(null, middle, max, getValue, progressCb))
       }
       // console.log('bisect both sides - start', [min, max], middle)
-      async.parallel(work, function(err, results){
+      async.series(work, function(err, results){
         var combinedResults = []
         combinedResults = combinedResults.concat(results[0])
         combinedResults = combinedResults.concat(results[1])
         // console.log('bisect both sides - end:', [min, max], middle, combinedResults)
-        cb(null, combinedResults)
+        completeCb(null, combinedResults)
       })
+
+    // at least one change in any amount of space:
+    // search for the change point
     } else if (span > 0) {
-      // search for the change point
+
       var target = range[1][1]
       // console.log('search for change - start:', [min, max], target)
       searchRange(min, max, target, getValue, function(err, result){
-        // console.log('search for change - end:', [min, max], target, result)
-        cb(null, [result])
+        console.log('search for change - end:', [min, max], target, result)
+        progressCb(result)
+        completeCb(null, [result])
       })
+
+    // no changes in range:
+    // nothing to see here - abort
     } else {
-      // nothing to see here
+
       // console.log('zero range', [min, max])
-      cb(null, [])
+      completeCb(null, [])
+
     }
   }
 
