@@ -13,7 +13,7 @@ function findAllTxs(provider, targetAddress, onTx, onComplete){
   query.getLatestBlockNumber(function(err, blockNumberHex){
     if (err) return onComplete(err)
     var blockNumber = parseInt(blockNumberHex, 16)
-    findAllTxsInRange(provider, targetAddress, 0, blockNumber-1, onTx, onComplete)
+    findAllTxsInRange(provider, targetAddress, 0, blockNumber, onTx, onComplete)
   })
 }
 
