@@ -10,7 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "async": "^2.0.0-rc.3",
-    "eth-store": "^2.2.0",
+    "eth-store": "^3.2.1",
     "request": "^2.71.0",
     "xhr": "^2.2.0"
   },
