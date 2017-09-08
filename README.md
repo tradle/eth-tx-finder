@@ -1,5 +1,7 @@
 ### Ethereum RPC backed sender->txs lookup
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/kumavis/eth-tx-finder.svg)](https://greenkeeper.io/)
+
 Status: Experimental
 
 note: search is in series as parallel is causing problems...
