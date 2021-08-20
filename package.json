@@ -1,5 +1,5 @@
 {
-  "name": "eth-tx-finder",
+  "name": "@tradle/eth-tx-finder",
   "version": "1.0.1",
   "description": "Status: Experimental",
   "main": "index.js",
@@ -9,18 +9,18 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@tradle/eth-store": "^2.2.1",
     "async": "^2.0.0-rc.3",
-    "eth-store": "^2.2.0",
     "request": "^2.71.0",
     "xhr": "^2.2.0"
   },
   "devDependencies": {},
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kumavis/eth-tx-finder.git"
+    "url": "git+https://github.com/tradle/eth-tx-finder.git"
   },
   "bugs": {
-    "url": "https://github.com/kumavis/eth-tx-finder/issues"
+    "url": "https://github.com/tradle/eth-tx-finder/issues"
   },
-  "homepage": "https://github.com/kumavis/eth-tx-finder#readme"
+  "homepage": "https://github.com/tradle/eth-tx-finder#readme"
 }

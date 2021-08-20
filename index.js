@@ -1,4 +1,4 @@
-const EthQuery = require('eth-store/query')
+const EthQuery = require('@tradle/eth-store/query')
 const async = require('async')
 const findIncrements = require('./disect.js')
 const MAX_CONCURRENT = 5
