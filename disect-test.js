@@ -56,7 +56,7 @@ function performTest(txCount, blockchainLength, cb){
   var networkReads = 0
   var dataLookup = memoize(lookupNonce, function(){ totalReads++ }, function(){ totalReads++; networkReads++ })
 
-  findIncrements(0, blockchainLength-1, dataLookup, function(err, matches){
+  findIncrements(0, blockchainLength-1, dataLookup, function () {}, function(err, matches){
     if (err) return cb(err)
     var results = {
       networkReads: networkReads,
