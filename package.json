@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "author": "Mark Vayngrib <mark@tradle.io>",
   "license": "ISC",
   "dependencies": {
     "@tradle/eth-store": "^2.2.1",
