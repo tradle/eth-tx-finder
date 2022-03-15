@@ -1,76 +1,92 @@
-const async = require('async')
-const xhr = process.browser ? require('xhr') : require('request')
-const EthQuery = require('eth-store/query')
-const findAllTxsInRange = require('./index.js').findAllTxsInRange
+const debug = require('debug')('example')
+if (!debug.enabled) {
+  console.log('[NOTE] this may take a while, with DEBUG=* you can figure out what is happening.\n---')
+}
 
-const RPC_ENDPOINT = 'https://mainnet.infura.io/'
+const RPC_ENDPOINT = 'http://127.0.0.1:3334'
 const targetAccount = '0x6aaa5f611b08f8ae98d377ba3f09b1717822b322'
-// const targetAccount = '0x7773dc77b66d96ee4c2f72cdc402349366c7b11d'
 
-var provider = {
-  sendAsync: function(payload, cb){
-    var requestParams = {
-      uri: RPC_ENDPOINT,
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-      rejectUnauthorized: false,
-    }
-    
-    var req = xhr(requestParams, function(err, res, body) {
-      if (err) return cb(err)
-      // parse response
-      var data
-      try {
-        data = JSON.parse(body)
-        if (data.error) return cb(data.error)
-      } catch (err) {
-        // console.error(RPC_ENDPOINT)
-        // console.error(body)
-        // console.error(err.stack)
-        return cb(err)
+console.log(`Looking for transactions for ${targetAccount} using RPC endpoint: ${RPC_ENDPOINT}\n---`)
+
+const { fetch } = require('cross-fetch')
+const EthQuery = require('@tradle/eth-store/query')
+
+const { findAllTxsInRange } = require('./index.js')
+
+async function sendPromise (payload) {
+  const body = JSON.stringify(payload)
+  const requestParams = {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body,
+    rejectUnauthorized: false
+  }
+
+  debug('Fetching request', requestParams)
+
+  try {
+    const res = await fetch(RPC_ENDPOINT, requestParams)
+    const data = await res.json()
+
+    if (data.error) {
+      let hint = ''
+      if (data.error.code === -32000) {
+        if (/no suitable peers available/.test(data.error.message)) {
+          hint = '\n\n[HINT]: it looks like your local node is still starting, give it some time!\n'
+        }
       }
-      
-      // console.log('network:', payload.method, payload.params, '->', data.result)
-      cb(null, data)
-    })
+      throw new Error(`Error from rpc: ${JSON.stringify(data.error)} for ${body}${hint}`)
+    }
+    return data
+  } catch (err) {
+    if (err.code === 'ECONNREFUSED') {
+      debug(err)
+      console.log('\n\n[ERROR] Can not find a local geth node. Maybe you need to start one?!\nRecommended mode:\n$ geth --http --http.port 3334 --cache.noprefetch --syncmode light')
+      process.exit(1)
+    }
+    throw err
   }
 }
 
-var startBlock = 0
-var endBlock = 1622266
+const provider = {
+  sendPromise
+}
 
-var query = new EthQuery(provider)
-async.parallel({
-  earliest: query.getNonce.bind(query, targetAccount, startBlock),
-  latest:   query.getNonce.bind(query, targetAccount, endBlock),
-}, function(err, results){
-  if (err) throw err
-  
-  var totalTxCount = hexToNumber(results.latest) - hexToNumber(results.earliest)
-  var foundTxCount = 0
-  
-  console.log(`searching for all txs for ${targetAccount}`)
-  findAllTxsInRange(provider, targetAccount, startBlock, endBlock, onTx, onComplete)
+;(async () => {
+  const startBlock = 0
+  const endBlock = 12084861
 
-  function onTx(txData){
+  const query = new EthQuery(provider)
+  const [earliest, latest] = await Promise.all([
+    query.getNonce(targetAccount, startBlock),
+    query.getNonce(targetAccount, endBlock)
+  ])
+
+  debug('earliest/latest', earliest, latest)
+
+  const totalTxCount = hexToNumber(latest) - hexToNumber(earliest)
+  let foundTxCount = 0
+
+  debug(`searching for all txs for targetAccount=${targetAccount}, totalTxCount=${totalTxCount}, foundTxCount=${foundTxCount}`)
+
+  const results = await findAllTxsInRange(provider, targetAccount, startBlock, endBlock, onTx)
+
+  console.log(results)
+
+  function onTx (txData) {
     foundTxCount++
-    console.log(`found: ${foundTxCount}/${totalTxCount} = ${100*foundTxCount/totalTxCount}%`)
+    console.log(`found (${txData.blockHash}): ${foundTxCount}/${totalTxCount} = ${100 * foundTxCount / totalTxCount}%`)
   }
-
-  function onComplete(err, results){
-    if (err) throw err
-    console.log('results:', results.map(tx=>tx.hash))
-  }
-
-})
-
+})()
+  .catch(err => {
+    console.error(err)
+    process.exit(1)
+  })
 
 // util
-
-function hexToNumber(hexString){
+function hexToNumber (hexString) {
   return parseInt(hexString, 16)
 }

@@ -4,17 +4,24 @@
   "description": "Status: Experimental",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run lint && npm run unit && npm run example",
+    "lint": "standard",
+    "unit": "node disect-test.js",
+    "example": "node example.js"
   },
   "author": "Mark Vayngrib <mark@tradle.io>",
   "license": "ISC",
   "dependencies": {
-    "@tradle/eth-store": "^2.2.1",
-    "async": "^2.0.0-rc.3",
-    "request": "^2.71.0",
-    "xhr": "^2.2.0"
+    "@tradle/eth-store": "^3.0.0",
+    "debug": "^4.3.3",
+    "ethereumjs-util": "^7.1.4",
+    "p-map": "^5.3.0",
+    "p-queue": "^7.2.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "cross-fetch": "^3.1.5",
+    "standard": "^16.0.4"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tradle/eth-tx-finder.git"

@@ -1,21 +1,15 @@
 const EthQuery = require('@tradle/eth-store/query')
-const async = require('async')
+const debug = require('debug')('tradle:eth-tx-finder')
 const findIncrements = require('./disect.js')
+const pMap = import('p-map').then(pmap => pmap.default)
+const pQueue = import('p-queue').then(pqueue => pqueue.default)
 const MAX_CONCURRENT = 5
 
-module.exports = {
-  findAllTxs,
-  findAllTxsInRange,
-  findAllTxsTo,
-  findAllTxsInRangeTo,
-}
-
 function rangeToArray (min, max) {
-  var arr = []
-  for (var i = min; i <= max; i++) {
+  const arr = []
+  for (let i = min; i <= max; i++) {
     arr.push(i)
   }
-
   return arr
 }
 
@@ -25,100 +19,92 @@ function flatten (arr) {
   }, [])
 }
 
-function findAllTxsTo(provider, targetAddress, onTx, onComplete) {
-  var query = new EthQuery(provider)
-  query.getLatestBlockNumber(function(err, blockNumberHex){
-    if (err) return onComplete(err)
-    var blockNumber = parseInt(blockNumberHex, 16)
-    findAllTxsInRangeTo(provider, targetAddress, 0, blockNumber, onTx, onComplete)
-  })
+async function findAllTxsTo (provider, targetAddress, onTx) {
+  const query = new EthQuery(provider)
+  const blockNumberHex = await query.getLatestBlockNumber()
+  const blockNumber = parseInt(blockNumberHex, 16)
+  return await findAllTxsInRangeTo(provider, targetAddress, 0, blockNumber, onTx)
 }
 
-function findAllTxsInRangeTo(provider, targetAddress, minBlockNumber, maxBlockNumber, onTx, onComplete) {
-  var query = new EthQuery(provider)
-  query.getLatestBlockNumber(function(err, blockNumberHex){
-    if (err) return onComplete(err)
-    var blockNumber = parseInt(blockNumberHex, 16)
-    async.mapLimit(rangeToArray(minBlockNumber, maxBlockNumber), MAX_CONCURRENT, function (blockNumber, cb) {
-      query.getBlockByNumber(blockNumber, function(err, block){
-        if (err) return onComplete(err)
-        var matchingTxs = block.transactions.filter(tx => tx.to === targetAddress)
-        matchingTxs.forEach(onTx)
-        cb(null, matchingTxs)
-      })
-    }, function (err, results) {
-      if (err) return onComplete(err)
-
-      onComplete(null, flatten(results))
-    })
-  })
-}
-
-function findAllTxs(provider, targetAddress, onTx, onComplete){
-  var query = new EthQuery(provider)
-  query.getLatestBlockNumber(function(err, blockNumberHex){
-    if (err) return onComplete(err)
-    var blockNumber = parseInt(blockNumberHex, 16)
-    findAllTxsInRange(provider, targetAddress, 0, blockNumber, onTx, onComplete)
-  })
-}
-
-function findAllTxsInRange(provider, targetAddress, minBlockNumber, maxBlockNumber, onTx, onComplete){
-
-  var query = new EthQuery(provider)
-  var nonceLookup = memoize(query.getNonce.bind(query, targetAddress))
-  var results = []
-  var blockProcessingQueue = async.queue(searchBlockForTxs)
-  var onBlockFound = blockProcessingQueue.push.bind(blockProcessingQueue)
-
-  findIncrements(minBlockNumber, maxBlockNumber, nonceLookup, onBlockFound, onAllBlocksFound)
-
-  function searchBlockForTxs(blockNumber, cb){
-    query.getBlockByNumber(blockNumber, function(err, block){
-      if (err) return onComplete(err)
-      var matchingTxs = block.transactions.filter(tx => tx.from === targetAddress)
-      results = results.concat(matchingTxs)
+async function findAllTxsInRangeTo (provider, targetAddress, minBlockNumber, maxBlockNumber, onTx) {
+  const query = new EthQuery(provider)
+  const results = await (await pMap)(
+    rangeToArray(minBlockNumber, maxBlockNumber),
+    async function (blockNumber) {
+      const block = await query.getBlockByNumber(blockNumber)
+      const matchingTxs = block.transactions.filter(tx => tx.to === targetAddress)
       matchingTxs.forEach(onTx)
-      cb()
-    })
-  }
+      return matchingTxs
+    },
+    { concurrency: MAX_CONCURRENT }
+  )
 
-  function onAllBlocksFound(err, matches){
-    if (err) return onComplete(err)
-    // wait for queue idle/drain
-    blockProcessingQueue.idle() ? returnResults() : blockProcessingQueue.drain = returnResults
-  }
-
-  function returnResults(){
-    // sort by blockNumber, ascending
-    results = results.sort((txA, txB) => txA.blockNumber < txA.blockNumber)
-    onComplete(null, results)
-  }
-
+  return flatten(results)
 }
 
+async function findAllTxs (provider, targetAddress, onTx) {
+  const query = new EthQuery(provider)
+  const blockNumberHex = await query.getLatestBlockNumber()
+  const blockNumber = parseInt(blockNumberHex, 16)
+  return await findAllTxsInRange(provider, targetAddress, 0, blockNumber, onTx)
+}
+
+async function findAllTxsInRange (provider, targetAddress, minBlockNumber, maxBlockNumber, onTx) {
+  const query = new EthQuery(provider)
+  const nonceLookup = memoize(block => {
+    debug('nonce', targetAddress, block)
+    return query.getNonce(targetAddress, block)
+  })
+  let results = []
+  const queue = new (await pQueue)({ concurrency: MAX_CONCURRENT })
+
+  debug('Looking for blocks', minBlockNumber, maxBlockNumber)
+
+  await findIncrements(minBlockNumber, maxBlockNumber, nonceLookup, blockNumber => {
+    queue.add(async () => {
+      debug('Looking for block', blockNumber)
+      const block = await query.getBlockByNumber(blockNumber)
+      const matchingTxs = block.transactions.filter(tx => {
+        return tx.from === targetAddress
+      })
+      results = [
+        ...results,
+        ...matchingTxs
+      ]
+      matchingTxs.forEach(onTx)
+    })
+  })
+  await queue.onIdle()
+
+  return results.sort((txA, txB) => txA.blockNumber < txB.blockNumber)
+}
 
 // util
-
-function memoize(fn, cacheHit, cacheMiss){
+function memoize (fn, cacheHit, cacheMiss) {
   cacheHit = cacheHit || noop
   cacheMiss = cacheMiss || noop
-  var cache = {}
-  return function(index, cb){
+  // TODO: turn into LRU cache
+  const cache = {}
+  return async function (index) {
     // try cache
-    var cachedResult = cache[index]
-    if (cachedResult !== undefined) {
-      cacheHit()
-      return cb(null, cachedResult)
-    }
-    // fallback to request
-    fn(index, function(err, result){
-      if (err) return cb(err)
-      cache[index] = result
+    let result = cache[index]
+    if (result === undefined) {
       cacheMiss()
-      return cb(null, result)
-    })
+      // fallback to request
+      result = await fn(index)
+      cache[index] = result
+    } else {
+      cacheHit()
+    }
+    return result
   }
 }
 
-function noop(){}
+function noop () {}
+
+module.exports = {
+  findAllTxs,
+  findAllTxsInRange,
+  findAllTxsTo,
+  findAllTxsInRangeTo
+}

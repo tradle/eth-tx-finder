@@ -1,7 +1,6 @@
-const async = require('async')
 const findIncrements = require('./disect')
 
-var testParams = [
+const testParams = [
   { txCount: 1, blockchainLength: 2e6 },
   { txCount: 1, blockchainLength: 2e6 },
   { txCount: 1, blockchainLength: 2e6 },
@@ -24,71 +23,70 @@ var testParams = [
 
   { txCount: 100, blockchainLength: 2e6 },
   { txCount: 100, blockchainLength: 2e6 },
-  { txCount: 100, blockchainLength: 2e6 },
+  { txCount: 100, blockchainLength: 2e6 }
 ]
 
-var testWork = testParams.map(function(params){
-  return  performTest.bind(null, params.txCount, params.blockchainLength)
-})
-
-async.series(testWork, function(err, allResults){
-  if (err) throw err
-  allResults.map(function(results, index){
-    var params = testParams[index]
+;(async () => {
+  const res = []
+  for (const params of testParams) {
+    const { txCount, blockchainLength } = params
+    res.push({
+      params,
+      results: await performTest(txCount, blockchainLength)
+    })
+  }
+  for (const { results, params } of res) {
     console.log(`params - ${params.txCount}/${params.blockchainLength.toExponential()}   lookups - network: ${results.networkReads}   total: ${results.totalReads}`)
+  }
+})()
+  .catch(err => {
+    console.error(err.stack)
+    process.exit(1)
   })
-})
 
-function performTest(txCount, blockchainLength, cb){
-
+async function performTest (txCount, blockchainLength) {
   // create txs
-  var txs = fillArray(txCount, function(){
+  const txs = fillArray(txCount, function () {
     return Math.floor(Math.random() * blockchainLength)
   }).sort()
 
-  function lookupNonce(blockNumber, cb){
-    var nonceCount = txs.filter(function(tx){ return tx <= blockNumber }).length
+  async function lookupNonce (blockNumber) {
+    const nonceCount = txs.filter(function (tx) { return tx <= blockNumber }).length
     // console.log(`(${reads}): ${blockNumber} -> ${nonceCount}`)
-    cb(null, nonceCount)
+    return nonceCount
   }
 
-  var totalReads = 0
-  var networkReads = 0
-  var dataLookup = memoize(lookupNonce, function(){ totalReads++ }, function(){ totalReads++; networkReads++ })
+  let totalReads = 0
+  let networkReads = 0
+  const dataLookup = memoize(lookupNonce, function () { totalReads++ }, function () { totalReads++; networkReads++ })
 
-  findIncrements(0, blockchainLength-1, dataLookup, function () {}, function(err, matches){
-    if (err) return cb(err)
-    var results = {
-      networkReads: networkReads,
-      totalReads: totalReads,
-      // blocks: matches,
-    }
-    cb(null, results)
-  })
+  await findIncrements(0, blockchainLength - 1, dataLookup)
 
+  return {
+    networkReads: networkReads,
+    totalReads: totalReads
+  }
 }
 
 // util
 
-function fillArray(num, fn){
+function fillArray (num, fn) {
   return Array(num).join(',').split(',').map(fn)
 }
 
-function memoize(fn, cacheHit, cacheMiss){
-  var cache = {}
-  return function(index, cb){
+function memoize (fn, cacheHit, cacheMiss) {
+  const cache = {}
+  return async function (index) {
     // try cache
-    var cachedResult = cache[index]
-    if (cachedResult !== undefined) {
-      cacheHit()
-      return cb(null, cachedResult)
-    }
-    // fallback to request
-    fn(index, function(err, result){
-      if (err) return cb(err)
-      cache[index] = result
+    let result = cache[index]
+    if (result === undefined) {
+      // fallback to request
       cacheMiss()
-      return cb(null, result)
-    })
+      result = await fn(index)
+      cache[index] = result
+    } else {
+      cacheHit()
+    }
+    return result
   }
 }
