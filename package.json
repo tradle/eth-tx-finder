@@ -10,6 +10,14 @@
     "example": "node example.js"
   },
   "author": "Mark Vayngrib <mark@tradle.io>",
+  "exports": {
+    ".": {
+      "require": "./index.js"
+    },
+    "./disect": {
+      "require": "./disect.js"
+    }
+  },
   "license": "ISC",
   "dependencies": {
     "@tradle/eth-store": "^3.0.0",
